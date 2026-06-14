@@ -16,7 +16,7 @@ services:
       - POSTGRESQL_REPLICATION_PASSWORD=senha_replicacao
     volumes:
       - psql_master_data:/bitnami/postgresql
-      - ./postgres-infra:/docker-entrypoint-initdb.d:ro
+      - ./postgres-config:/docker-entrypoint-initdb.d:ro  # Pasta atualizada!
     networks:
       - db_net
     restart: always
@@ -89,7 +89,7 @@ services:
     volumes:
       - ./nginx-config/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - web_net  # Totalmente isolado da rede interna de dados
+      - web_net  # Isolado da rede interna de dados
     depends_on:
       - authelia
     restart: always
