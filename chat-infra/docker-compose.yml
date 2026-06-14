@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # CONFIGURANDO O POSTGRES MASTER
+  psql_01:
+    image: bitnami/postgresql:latest
+    container_name: psql_01
+    environment:
+      - POSTGRESQL_USERNAME=chat_admin          # Usuário padrão do chat
+      - POSTGRESQL_PASSWORD=senha_secreta
+      - POSTGRESQL_DATABASE=chat_db             # Banco padrão do chat
+      - POSTGRESQL_REPLICATION_MODE=master      # Define este nó como o Master
+      - POSTGRESQL_REPLICATION_USER=replicador  # Usuário que o Slave usará para copiar os dados
+      - POSTGRESQL_REPLICATION_PASSWORD=senha_replicacao
+    volumes:
+      - psql_master_data:/bitnami/postgresql
+      # Aqui está o ajuste para a sua nova pasta!
+      - ./postgres-infra:/docker-entrypoint-initdb.d:ro
+    networks:
+      - db_net
+    restart: always
+  # CONFIGURANDO A READ REPLICA
+  psql_01_rr:
+    image: bitnami/postgresql:latest
+    container_name: psql_01_rr
+    environment:
+      - POSTGRESQL_PASSWORD=senha_secreta
+      - POSTGRESQL_REPLICATION_MODE=slave       # Define este nó como uma Réplica (Slave)
+      - POSTGRESQL_MASTER_HOST=psql_01          # Aponta para o nome do contêiner do Master
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+      - POSTGRESQL_REPLICATION_USER=replicador  # Usa as credenciais que o Master liberou
+      - POSTGRESQL_REPLICATION_PASSWORD=senha_replicacao
+    volumes:
+      - psql_replica_data:/bitnami/postgresql   # Volume próprio para a réplica
+    depends_on:
+      - psql_01                                 # Garante que o Slave só liga DEPOIS do Master estar de pé
+    networks:
+      - db_net
+    restart: always
