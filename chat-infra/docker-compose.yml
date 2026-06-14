@@ -75,6 +75,8 @@ services:
     image: authelia/authelia:latest
     container_name: authelia_server
     user: "1000:1000"
+    ports:
+      - "9091:9091"
     volumes:
       - ./authelia-config:/config
     networks:
