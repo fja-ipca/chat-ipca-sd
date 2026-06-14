@@ -42,27 +42,32 @@ services:
       - db_net
     restart: always
 
-  # ==========================================
+# ==========================================
   # CAMADA DE BALANCEAMENTO DE DADOS (PGPOOL-II)
   # ==========================================
   pgpool:
     image: bitnamilegacy/pgpool:4.6.2-debian-12-r7
     container_name: pgpool_balancer
     environment:
-      - PGPOOL_BACKEND_NODES=0:psql_01:5432,1:psql_01_rr:5432 # Mapeia Master (nó 0) e Slave (nó 1)
+      - PGPOOL_BACKEND_NODES=0:psql_01:5432,1:psql_01_rr:5432
       - PGPOOL_SR_CHECK_USER=chat_admin
       - PGPOOL_SR_CHECK_PASSWORD=senha_secreta
       - PGPOOL_SR_CHECK_DATABASE=chat_db
-      - PGPOOL_ENABLE_LOAD_BALANCE=yes                       # Ativa a divisão de leituras/escritas
+      - PGPOOL_ENABLE_LOAD_BALANCE=yes
+      # Novas variáveis obrigatórias da imagem legacy:
+      - PGPOOL_ADMIN_USERNAME=admin
+      - PGPOOL_ADMIN_PASSWORD=senha_pgpool_admin
+      - PGPOOL_POSTGRES_USERNAME=chat_admin
+      - PGPOOL_POSTGRES_PASSWORD=senha_secreta
     ports:
-      - "5432:5432"                                           # Expõe a porta padrão do Postgres para a VM
+      - "5432:5432"
     depends_on:
       - psql_01
       - psql_01_rr
     networks:
       - db_net
     restart: always
-
+    
   # ==========================================
   # CAMADA DE AUTENTICAÇÃO (AUTHELIA)
   # ==========================================
