@@ -5,7 +5,7 @@ services:
   # CAMADA DE PERSISTÊNCIA (POSTGRESQL MASTER)
   # ==========================================
   psql_01:
-    image: bitnami/postgresql:16-debian-12
+    image: bitnami/postgresql:latest
     container_name: psql_01
     environment:
       - POSTGRESQL_USERNAME=chat_admin          # Usuário padrão do chat
@@ -25,7 +25,7 @@ services:
   # CAMADA DE PERSISTÊNCIA (POSTGRESQL SLAVE)
   # ==========================================
   psql_01_rr:
-    image: bitnami/postgresql:16-debian-12
+    image: bitnami/postgresql:latest
     container_name: psql_01_rr
     environment:
       - POSTGRESQL_PASSWORD=senha_secreta
