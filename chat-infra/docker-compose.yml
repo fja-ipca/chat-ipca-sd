@@ -80,10 +80,10 @@ services:
     volumes:
       - ./authelia-config:/config
     networks:
-      - db_net   # Para falar com o Pgpool
-      - web_net  # Para falar com o Nginx
+      db_net:
+      web_net:
         aliases:
-          - authelia # <-- Garante que o Nginx o chama por 'authelia'
+          - authelia
     depends_on:
       - pgpool
     restart: always
