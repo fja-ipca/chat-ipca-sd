@@ -1,3 +1,45 @@
 theme: light
+
+server:
+  address: 'tcp://0.0.0.0:9091'
+
+log:
+  level: 'info'
+
 jwt_secret: 'um_secret_temporario_de_trinta_e_dois_bits_minimo'
+
 default_redirection_url: 'http://localhost'
+
+# 1. Onde ficam os utilizadores (Usando um ficheiro local para testes)
+authentication_backend:
+  password_reset:
+    disable: true
+  file:
+    path: '/config/users_database.yml'
+
+# 2. Política de Acesso padrão (Como não há regras específicas, exige 1 fator)
+access_control:
+  default_policy: 'one_factor'
+
+# 3. Configuração de Cookies e Sessão
+session:
+  name: 'authelia_session'
+  secret: 'outro_secret_de_trinta_e_dois_caracteres_minimo'
+  cookies:
+    - domain: 'localhost'
+      authelia_url: 'http://localhost'
+
+# 4. A JOIA DA COROA: Conexão ao teu Pgpool de Alta Disponibilidade
+storage:
+  encryption_key: 'chave_de_encriptacao_de_trinta_e_dois_caracteres'
+  postgres:
+    host: 'pgpool_balancer'
+    port: 5432
+    database: 'authelia_db'
+    username: 'chat_admin'
+    password: 'senha_secreta'
+
+# 5. Notificador (Em vez de SMTP/Email real, escreve os tokens num ficheiro de texto)
+notifier:
+  filesystem:
+    filename: '/config/notification.txt'
