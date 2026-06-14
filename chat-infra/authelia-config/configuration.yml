@@ -25,7 +25,7 @@ session:
   name: 'authelia_session'
   secret: 'outro_secret_de_trinta_e_dois_caracteres_minimo'
   cookies:
-    # ⚠️ LEMBRETE PARA O FUTURO (PRODUÇÃO):
+    # LEMBRETE PARA O FUTURO (PRODUÇÃO):
     # Quando o sistema for para o mundo, substitui o IP '172.16.0.194' pelo domínio pai definitivo (ex: 'chat-ipca.pt').
     # Lembra-te também de REMOVER a linha 'insecure: true' para forçar HTTPS obrigatório em produção!
     - domain: '172.16.0.194'
