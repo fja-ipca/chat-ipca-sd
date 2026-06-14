@@ -28,9 +28,9 @@ session:
     # LEMBRETE PARA O FUTURO (PRODUÇÃO):
     # Quando o sistema for para o mundo, substitui o IP '172.16.0.194' pelo domínio pai definitivo (ex: 'chat-ipca.pt').
     # Lembra-te também de REMOVER a linha 'insecure: true' para forçar HTTPS obrigatório em produção!
-    - domain: '172.16.0.194'
-      authelia_url: 'http://172.16.0.194:9091'
-      default_redirection_url: 'http://172.16.0.194:9091/chat'
+    - domain: '127.0.0.1'
+      authelia_url: 'http://127.0.0.1:9091'
+      default_redirection_url: 'http://127.0.0.1:9091/chat'
       insecure: true # <-- Necessário para o teu browser aceitar os cookies locais via HTTP
 
 # Correção do aviso: Nova sintaxe 'address' unificada com tcp://
