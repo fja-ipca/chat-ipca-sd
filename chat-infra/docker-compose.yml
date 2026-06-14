@@ -67,13 +67,14 @@ services:
     networks:
       - db_net
     restart: always
-    
+
   # ==========================================
   # CAMADA DE AUTENTICAÇÃO (AUTHELIA)
   # ==========================================
   authelia:
     image: authelia/authelia:latest
     container_name: authelia_server
+    user: "1000:1000"
     volumes:
       - ./authelia-config:/config
     networks:
