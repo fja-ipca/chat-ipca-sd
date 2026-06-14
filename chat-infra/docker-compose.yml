@@ -25,7 +25,7 @@ services:
   # CAMADA DE PERSISTÊNCIA (POSTGRESQL SLAVE)
   # ==========================================
   psql_01_rr:
-    image: image: bitnami/postgresql:16
+    image: bitnami/postgresql:16
     container_name: psql_01_rr
     environment:
       - POSTGRESQL_PASSWORD=senha_secreta
@@ -46,7 +46,7 @@ services:
   # CAMADA DE BALANCEAMENTO DE DADOS (PGPOOL-II)
   # ==========================================
   pgpool:
-    image: image: bitnami/pgpool:4
+    image: bitnami/pgpool:4
     container_name: pgpool_balancer
     environment:
       - PGPOOL_BACKEND_NODES=0:psql_01:5432,1:psql_01_rr:5432 # Mapeia Master (nó 0) e Slave (nó 1)
