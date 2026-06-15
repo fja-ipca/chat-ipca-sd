@@ -5,4 +5,9 @@ chat-infra/authelia/notification.txt
 # Ignorar ficheiros temporários do sistema ou logs
 .DS_Store
 *.log
-.env
+.env*
+!.env.example
+node_modules/
+build/
+dist/
+coverage/
