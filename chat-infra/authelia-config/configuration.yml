@@ -29,7 +29,7 @@ session:
   cookies:
     - domain: 'chat.local'
       authelia_url: 'https://chat.local'
-      default_redirection_url: 'https://chat.local/chat'
+      default_redirection_url: 'https://chat.local/ipca-chat/'
 
 # Correção do aviso: Nova sintaxe 'address' unificada com tcp://
 storage:
