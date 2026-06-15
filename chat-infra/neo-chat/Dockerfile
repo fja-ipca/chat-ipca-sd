@@ -15,5 +15,7 @@ RUN npm run build
 # O porto a expor
 EXPOSE 3000
 
+ENV NODE_ENV=production
+
 # Executar a aplicação
 CMD ["npm", "run", "start"]
