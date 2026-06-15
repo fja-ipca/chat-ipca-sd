@@ -105,7 +105,7 @@ export default function App() {
 
   const fetchAvailableRooms = async () => {
     try {
-      const res = await fetch('/api/rooms');
+      const res = await fetch('/chat-api/rooms');
       const data = await res.json();
       setAvailableRooms(data);
     } catch (e) {
