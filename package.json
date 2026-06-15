@@ -1,0 +1,14 @@
+{
+  "name": "ipca-chat-root",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "chat-infra/neo-chat"
+  ],
+  "scripts": {
+    "dev": "npm run dev --prefix chat-infra/neo-chat",
+    "build": "npm run build --prefix chat-infra/neo-chat",
+    "start": "npm run start --prefix chat-infra/neo-chat",
+    "lint": "npm run lint --prefix chat-infra/neo-chat"
+  }
+}
