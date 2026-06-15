@@ -32,3 +32,5 @@ chat-ipca/
     │   └── users_database.yml
     └── postgres-init/          # Scripts de inicialização automática do cluster SQL
         └── init-multiple-databases.sql
+
+#
