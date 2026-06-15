@@ -56,11 +56,11 @@ async function startServer() {
   });
 
   // REST API (if needed)
-  app.get('/api/health', (req, res) => {
+  app.get('/chat-api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
 
-  app.get('/api/rooms', (req, res) => {
+  app.get('/chat-api/rooms', (req, res) => {
     // Only return public rooms as list
     const publicRooms = Array.from(rooms.values()).filter((r) => !r.isPrivate);
     res.json(publicRooms);
