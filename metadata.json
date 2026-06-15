@@ -1,0 +1,6 @@
+{
+  "name": "neo-chat",
+  "description": "A real-time chat application with public and private rooms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
