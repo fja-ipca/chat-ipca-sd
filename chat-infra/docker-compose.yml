@@ -89,6 +89,22 @@ services:
     restart: always
 
   # ==========================================
+  # CAMADA DE APLICAÇÃO (NEO-CHAT)
+  # ==========================================
+  neo_chat:
+    build:
+      context: ./neo-chat
+    container_name: neo_chat_app
+    environment:
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    networks:
+      web_net:
+        aliases:
+          - neo_chat
+    restart: always
+
+  # ==========================================
   # CAMADA DE PROXY E LOAD BALANCER (NGINX)
   # ==========================================
   nginx:
@@ -105,6 +121,7 @@ services:
       - web_net  # Isolado da rede interna de dados
     depends_on:
       - authelia
+      - neo_chat
     restart: always
 
 # ==========================================
