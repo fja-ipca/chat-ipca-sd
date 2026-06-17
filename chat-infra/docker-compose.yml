@@ -102,6 +102,7 @@ services:
       web_net:
         aliases:
           - neo_chat
+      db_net:
     restart: always
 
   # ==========================================

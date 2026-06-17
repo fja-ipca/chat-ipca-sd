@@ -3,12 +3,12 @@ import http from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
 import { createServer as createViteServer } from 'vite';
-import { v4 as uuidv4 } from 'uuid'; // need to install uuid
 import { GoogleGenAI } from "@google/genai";
-
-// We'll not use uuid library right now, let's use a simple generator or socket ids string.
-// Let's use crypto.randomUUID() which is built-in in node.
 import crypto from 'crypto';
+import pg from 'pg';
+import { createAdapter } from '@socket.io/postgres-adapter';
+
+const { Pool } = pg;
 
 interface User {
   id: string; // Socket ID
@@ -30,110 +30,260 @@ interface ChatMessage {
   timestamp: string;
 }
 
-// In-memory data store
-const users = new Map<string, User>(); // socketId -> User
-const rooms = new Map<string, ChatRoom>(); // roomId -> Room
-// A set to track who is in which room: roomID -> Set<socketId>
-const roomUsers = new Map<string, Set<string>>();
+// In-memory fallbacks
+const memUsers = new Map<string, User>();
+const memRooms = new Map<string, ChatRoom>();
+const memRoomUsers = new Map<string, Set<string>>();
 
-// Setup initial public rooms
-const defaultRooms = [
-  { id: 'general', name: 'General', isPrivate: false },
-  { id: 'tech', name: 'Technology', isPrivate: false },
-  { id: 'random', name: 'Random', isPrivate: false },
-];
-defaultRooms.forEach((r) => {
-  rooms.set(r.id, r);
-  roomUsers.set(r.id, new Set());
+const pool = new Pool({
+  user: process.env.POSTGRESQL_USERNAME || 'chat_admin',
+  host: process.env.DB_HOST || 'pgpool', 
+  database: process.env.POSTGRESQL_DATABASE || 'chat_db',
+  password: process.env.POSTGRESQL_PASSWORD || 'senha_secreta',
+  port: parseInt(process.env.DB_PORT || '5432'),
 });
 
+let isDBConnected = false;
+
+async function initDB() {
+  try {
+    await pool.query('SELECT 1'); // Ping
+    console.log("Connected to PostgreSQL -> Using DB for State and Pub/Sub");
+    isDBConnected = true;
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_users (
+        id TEXT PRIMARY KEY,
+        nickname TEXT
+      );
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        is_private BOOLEAN DEFAULT FALSE
+      );
+      CREATE TABLE IF NOT EXISTS chat_room_users (
+        room_id TEXT,
+        user_id TEXT,
+        PRIMARY KEY (room_id, user_id)
+      );
+    `);
+
+    const defaultRooms = [
+      { id: 'general', name: 'General', isPrivate: false },
+      { id: 'tech', name: 'Technology', isPrivate: false },
+      { id: 'random', name: 'Random', isPrivate: false },
+    ];
+
+    for (const r of defaultRooms) {
+      await pool.query('INSERT INTO chat_rooms (id, name, is_private) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [r.id, r.name, r.isPrivate]);
+    }
+  } catch (err: any) {
+    console.warn("Could not connect to PostgreSQL. Falling back to in-memory mode.", err.message);
+    const defaultRooms = [
+      { id: 'general', name: 'General', isPrivate: false },
+      { id: 'tech', name: 'Technology', isPrivate: false },
+      { id: 'random', name: 'Random', isPrivate: false },
+    ];
+    defaultRooms.forEach((r) => {
+      memRooms.set(r.id, r);
+      memRoomUsers.set(r.id, new Set());
+    });
+  }
+}
+
+async function insertUser(id: string, nickname: string) {
+    if (isDBConnected) {
+       await pool.query(
+        'INSERT INTO chat_users (id, nickname) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET nickname = EXCLUDED.nickname',
+        [id, nickname]
+      );
+    } else {
+       memUsers.set(id, { id, nickname });
+    }
+}
+
+async function deleteUser(id: string) {
+    if (isDBConnected) {
+       await pool.query('DELETE FROM chat_room_users WHERE user_id = $1', [id]);
+       await pool.query('DELETE FROM chat_users WHERE id = $1', [id]);
+    } else {
+       memUsers.delete(id);
+    }
+}
+
+async function getUsers() {
+    if (isDBConnected) {
+       const res = await pool.query('SELECT * FROM chat_users');
+       return res.rows.map(r => ({ id: r.id, nickname: r.nickname }));
+    }
+    return Array.from(memUsers.values());
+}
+
+async function getUser(id: string) {
+    if (isDBConnected) {
+       const res = await pool.query('SELECT * FROM chat_users WHERE id = $1', [id]);
+       if (res.rows.length === 0) return null;
+       return { id: res.rows[0].id, nickname: res.rows[0].nickname };
+    }
+    return memUsers.get(id) || null;
+}
+
+async function getRooms() {
+    if (isDBConnected) {
+       const res = await pool.query('SELECT * FROM chat_rooms');
+       return res.rows.map(r => ({ id: r.id, name: r.name, isPrivate: r.is_private }));
+    }
+    return Array.from(memRooms.values());
+}
+
+async function getRoom(id: string) {
+    if (isDBConnected) {
+       const res = await pool.query('SELECT * FROM chat_rooms WHERE id = $1', [id]);
+       if (res.rows.length === 0) return null;
+       return { id: res.rows[0].id, name: res.rows[0].name, isPrivate: res.rows[0].is_private };
+    }
+    return memRooms.get(id) || null;
+}
+
+async function createRoom(room: ChatRoom) {
+    if (isDBConnected) {
+       await pool.query('INSERT INTO chat_rooms (id, name, is_private) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [room.id, room.name, room.isPrivate]);
+    } else {
+       if (!memRooms.has(room.id)) {
+           memRooms.set(room.id, room);
+           memRoomUsers.set(room.id, new Set());
+       }
+    }
+}
+
+async function joinRoom(roomId: string, userId: string) {
+    if (isDBConnected) {
+       await pool.query('INSERT INTO chat_room_users (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [roomId, userId]);
+    } else {
+       const usersInRoom = memRoomUsers.get(roomId);
+       if (usersInRoom) usersInRoom.add(userId);
+    }
+}
+
+async function leaveRoom(roomId: string, userId: string) {
+    if (isDBConnected) {
+       await pool.query('DELETE FROM chat_room_users WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+    } else {
+       const usersInRoom = memRoomUsers.get(roomId);
+       if (usersInRoom) usersInRoom.delete(userId);
+    }
+}
+
+async function getRoomUsers(roomId: string) {
+    if (isDBConnected) {
+       const res = await pool.query(`
+           SELECT u.id, u.nickname FROM chat_users u
+           JOIN chat_room_users cru ON u.id = cru.user_id
+           WHERE cru.room_id = $1
+       `, [roomId]);
+       return res.rows.map(r => ({ id: r.id, nickname: r.nickname }));
+    }
+    return Array.from(memRoomUsers.get(roomId) || [])
+      .map(id => memUsers.get(id))
+      .filter(u => !!u);
+}
+
+async function getRoomsForUser(userId: string) {
+    if (isDBConnected) {
+       const res = await pool.query('SELECT room_id FROM chat_room_users WHERE user_id = $1', [userId]);
+       return res.rows.map(r => r.room_id);
+    }
+    const rooms = [];
+    for (const [roomId, users] of memRoomUsers.entries()) {
+        if (users.has(userId)) rooms.push(roomId);
+    }
+    return rooms;
+}
+
 async function startServer() {
+  await initDB();
+
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || '3000');
   const server = http.createServer(app);
+  
   const io = new Server(server, {
     cors: { origin: '*' }
   });
+  
+  if (isDBConnected) {
+     io.adapter(createAdapter(pool));
+  }
 
-  // REST API (if needed)
   app.get('/chat-api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', dbConnected: isDBConnected });
   });
 
-  app.get('/chat-api/rooms', (req, res) => {
-    // Only return public rooms as list
-    const publicRooms = Array.from(rooms.values()).filter((r) => !r.isPrivate);
+  app.get('/chat-api/rooms', async (req, res) => {
+    const rooms = await getRooms();
+    const publicRooms = rooms.filter((r: any) => !r.isPrivate);
     res.json(publicRooms);
   });
 
-  // Websocket handling
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // Initial event when user sets nickname
-    socket.on('set-nickname', (nickname: string) => {
-      const user = { id: socket.id, nickname };
-      users.set(socket.id, user);
+    socket.on('set-nickname', async (nickname: string) => {
+      await insertUser(socket.id, nickname);
+      const user = await getUser(socket.id);
       socket.emit('registered', user);
-      // broadcast global active users update if needed
-      io.emit('global-users', Array.from(users.values()));
+      
+      const allUsers = await getUsers();
+      io.emit('global-users', allUsers);
     });
 
-    socket.on('fetch-global-users', () => {
-      socket.emit('global-users', Array.from(users.values()));
+    socket.on('fetch-global-users', async () => {
+      const allUsers = await getUsers();
+      socket.emit('global-users', allUsers);
     });
 
-    socket.on('create-room', (name: string) => {
+    socket.on('create-room', async (name: string) => {
       const roomId = crypto.randomUUID();
       const newRoom = { id: roomId, name, isPrivate: false };
-      rooms.set(roomId, newRoom);
-      roomUsers.set(roomId, new Set());
+      
+      await createRoom(newRoom);
       io.emit('room-created', newRoom);
     });
 
-    socket.on('create-private-room', (targetUserId: string) => {
-      const currentUser = users.get(socket.id);
-      const targetUser = users.get(targetUserId);
+    socket.on('create-private-room', async (targetUserId: string) => {
+      const currentUser = await getUser(socket.id);
+      const targetUser = await getUser(targetUserId);
 
       if (!currentUser || !targetUser) return;
 
-      // Unique room ID based on sorted IDs to ensure both get same ID
       const ids = [currentUser.id, targetUser.id].sort();
       const roomId = `private-${ids[0]}-${ids[1]}`;
 
-      if (!rooms.has(roomId)) {
-        rooms.set(roomId, {
-          id: roomId,
-          name: `PM: ${currentUser.nickname} & ${targetUser.nickname}`,
-          isPrivate: true,
+      const existingRm = await getRoom(roomId);
+      if (!existingRm) {
+        await createRoom({
+           id: roomId,
+           name: `PM: ${currentUser.nickname} & ${targetUser.nickname}`,
+           isPrivate: true
         });
-        roomUsers.set(roomId, new Set());
       }
       
-      // Let both know they have a private room available
-      socket.emit('private-room-created', rooms.get(roomId));
-      io.to(targetUserId).emit('private-room-created', rooms.get(roomId));
+      const rmInfo = await getRoom(roomId);
+      socket.emit('private-room-created', rmInfo);
+      io.to(targetUserId).emit('private-room-created', rmInfo);
     });
 
-    socket.on('join-room', (roomId: string) => {
-      if (!rooms.has(roomId)) return;
+    socket.on('join-room', async (roomId: string) => {
+      const rmInfo = await getRoom(roomId);
+      if (!rmInfo) return;
 
       socket.join(roomId);
-      
-      const usersInRoom = roomUsers.get(roomId);
-      if (usersInRoom) {
-        usersInRoom.add(socket.id);
-      }
+      await joinRoom(roomId, socket.id);
 
-      // Broadcast to people in the room about the updated user list
-      const updatedUsers = Array.from(roomUsers.get(roomId) || [])
-        .map(id => users.get(id))
-        .filter(u => !!u);
-      
+      const updatedUsers = await getRoomUsers(roomId);
       io.to(roomId).emit('room-users-update', { roomId, users: updatedUsers });
       
-      // Tell others a new user joined
-      const user = users.get(socket.id);
+      const user = await getUser(socket.id);
       if (user) {
          io.to(roomId).emit('message-received', {
             id: crypto.randomUUID(),
@@ -146,20 +296,14 @@ async function startServer() {
       }
     });
 
-    socket.on('leave-room', (roomId: string) => {
+    socket.on('leave-room', async (roomId: string) => {
       socket.leave(roomId);
-      const usersInRoom = roomUsers.get(roomId);
-      if (usersInRoom) {
-        usersInRoom.delete(socket.id);
-      }
+      await leaveRoom(roomId, socket.id);
 
-      const updatedUsers = Array.from(roomUsers.get(roomId) || [])
-        .map(id => users.get(id))
-        .filter(u => !!u);
-      
+      const updatedUsers = await getRoomUsers(roomId);
       io.to(roomId).emit('room-users-update', { roomId, users: updatedUsers });
 
-      const user = users.get(socket.id);
+      const user = await getUser(socket.id);
       if (user) {
          io.to(roomId).emit('message-received', {
             id: crypto.randomUUID(),
@@ -173,7 +317,7 @@ async function startServer() {
     });
 
     socket.on('send-message', async (data: { roomId: string, content: string }) => {
-      const user = users.get(socket.id);
+      const user = await getUser(socket.id);
       if (!user) return;
 
       const message: ChatMessage = {
@@ -192,9 +336,7 @@ async function startServer() {
           const ai = new GoogleGenAI({
             apiKey: process.env.GEMINI_API_KEY,
             httpOptions: {
-              headers: {
-                'User-Agent': 'aistudio-build',
-              }
+              headers: { 'User-Agent': 'aistudio-build' }
             }
           });
           
@@ -228,51 +370,44 @@ async function startServer() {
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log('User disconnected:', socket.id);
-      const user = users.get(socket.id);
-      users.delete(socket.id);
+      const user = await getUser(socket.id);
+      
+      const userRooms = await getRoomsForUser(socket.id);
+      await deleteUser(socket.id);
 
-      // Clean up rooms
-      roomUsers.forEach((userIds, roomId) => {
-        if (userIds.has(socket.id)) {
-          userIds.delete(socket.id);
-          const updatedUsers = Array.from(userIds)
-            .map(id => users.get(id))
-            .filter(u => !!u);
-          io.to(roomId).emit('room-users-update', { roomId, users: updatedUsers });
-          
-          if (user) {
-            io.to(roomId).emit('message-received', {
-               id: crypto.randomUUID(),
-               roomId,
-               senderId: 'system',
-               senderNickname: 'System',
-               content: `${user.nickname} disconnected`,
-               timestamp: new Date().toISOString()
-            });
-          }
+      for (const roomId of userRooms) {
+        const updatedUsers = await getRoomUsers(roomId);
+        io.to(roomId).emit('room-users-update', { roomId, users: updatedUsers });
+        
+        if (user) {
+          io.to(roomId).emit('message-received', {
+             id: crypto.randomUUID(),
+             roomId,
+             senderId: 'system',
+             senderNickname: 'System',
+             content: `${user.nickname} disconnected`,
+             timestamp: new Date().toISOString()
+          });
         }
-      });
-      io.emit('global-users', Array.from(users.values()));
+      }
+      
+      const allUsers = await getUsers();
+      io.emit('global-users', allUsers);
     });
   });
 
-  // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
-    // app.use(vite.middlewares) will handle serving Vite's transformed files
-    // But since express v4 doesn't have good type typings for it sometimes, we use any:
     app.use((vite as any).middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
   server.listen(PORT, '0.0.0.0', () => {
@@ -280,4 +415,4 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(console.error);
