@@ -9,7 +9,7 @@ A infraestrutura foi projetada seguindo as melhores práticas de resiliência, t
 ![Arquitetura Planejada](docs/arquitetura.png)
 
 ### Componentes Principais:
-* **Camada de Entrada (Proxy Reverso):** Nó **Nginx** atuando como proxy de borda, distribuindo tráfego para a aplicação frontend/backend e gerindo as conexões de WebSockets, além de verificar logins.
+* **Camada de Entrada (Proxy Reverso e Load Balancer):** O tráfego de entrada passa primeiramente por um nó **Nginx LB** (Load Balancer L4) puro, que distribui e balanceia ativamente as requisições para um **cluster de proxies Nginx** (Nginx_01 e Nginx_02). Estes por sua vez tratam a terminação SSL, rotas e Forward Auth.
 * **Camada de Autenticação (IAM):** Clusterizado com **Authelia** (em modo *Forward Auth*), protegendo as rotas e garantindo SSO centralizado sem precisar reescrever as rotas de autenticação no próprio chat.
 * **Camada de Aplicação (Neo-Chat):** Aplicação interativa em tempo real baseada em Vite/React (Frontend) e Node.js+Socket.io (Backend). Integra suporte a inteligência artificial utilizando a **API do Google Gemini**. Empacotada com um Dockerfile dedicado expondo a porta `3000`.
 * **Camada de Persistência (Dados):** Cluster **PostgreSQL** com replicação síncrona/assíncrona (Master-Slave) gerido por um instanciamento de **Pgpool-II**, responsável por balanceamento de consultas DQL e failover.
@@ -29,7 +29,7 @@ Antes de executar a aplicação, é necessário preparar a máquina virtual Debi
 
 ## 📁 Estrutura de Diretórios
 
-O projeto adota o padrão *Monorepo*, organizando o chat e os serviços da infraestrutura de forma partilhada:
+O projeto adota o padrão *Monorepo*, organizando o chat e os serviços da infraestrutura de forma modular:
 
 ```text
 chat-ipca/
@@ -45,7 +45,8 @@ chat-ipca/
 └── chat-infra/                 # Ficheiros de configuração da infraestrutura
     ├── docker-compose.yml      # Orquestração do cluster (Postgres, Pgpool, Authelia, Nginx, App)
     ├── .env                    # Variáveis de ambiente secretas (ex: GEMINI_API_KEY)
-    ├── nginx-config/           # Configuração de balanceamento, rotas (/ipca-chat/) e Forward Auth
+    ├── nginx-lb-config/        # Configuração do Load Balancer puro (L4)
+    ├── nginx-config/           # Configuração dos nós de proxy reverso, rotas (/ipca-chat/) e Forward Auth
     ├── nginx-certs/            # Chaves e certificados SSL/TLS para comunicações locais HTTPS
     ├── html-stub/              # Documentos HTML estáticos e fallbacks (e.g., erro, manutenção)
     ├── authelia-config/        # Configurações do SSO e do gestor de identidades

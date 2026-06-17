@@ -6,7 +6,7 @@ export interface User {
 export interface ChatRoom {
   id: string;
   name: string;
-  isPrivate: boolean;
+  isPrivate: boolean; // if true, it's a 1-on-1 chat
   participants: User[]; // Used mainly for private rooms if needed, but we track dynamic presence
 }
 
