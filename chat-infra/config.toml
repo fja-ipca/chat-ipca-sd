@@ -1,2 +1,3 @@
 [cluster]
 secret_raft = "1234567890abcdef1234567890abcdef"
+secret_api = "1234567890abcdef1234567890abcdef"
