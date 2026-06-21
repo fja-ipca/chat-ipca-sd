@@ -12,7 +12,7 @@ services:
       - PUB_URL=chat.local
       - LISTEN_SCHEME=http
       - ADMIN_PASSWORD=admin_secret
-      - ENC_KEYS=kid1/9B1o/aXfBwMlc/tA4KDEY47eM5S3nFpC9JbOQsZ1wFk=
+      - ENC_KEYS=kid1/qWeRtYuIoPaSdFgHjKlZxCvBnMqWeRtYuIoPaSdFgH
       - ENC_KEY_ACTIVE=kid1
     volumes:
       - rauthy_data:/app/data
