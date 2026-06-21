@@ -5,7 +5,7 @@ services:
   # CAMADA DE AUTENTICAÇÃO (RAUTHY)
   # ==========================================
   rauthy:
-    image: ghcr.io/sebadob/rauthy:0.24.4
+    image: ghcr.io/sebadob/rauthy:latest
     container_name: rauthy_server
     environment:
       - DATABASE_URL=sqlite:data/rauthy.sqlite
@@ -16,7 +16,6 @@ services:
       - ENC_KEY_ACTIVE=kid1
     volumes:
       - rauthy_data:/app/data
-      - ./config.toml:/app/config.toml
     ports:
       - "8080:8080"
     networks:
